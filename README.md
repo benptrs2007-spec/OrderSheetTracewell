@@ -15,37 +15,53 @@ There is nothing to compile: the repo root *is* the deployment.
 
 ## Read this before you register the module: the CORS allowlist
 
-The Tracewell backend only accepts API calls from a fixed set of origins. Per the
-Module Developer Kit, that list is:
+This decides whether the module works at all, and the Module Developer Kit is out
+of date on it. Every call the module makes carries an `Authorization` header,
+which forces the browser to send a CORS **preflight**. If the module's origin is
+not on the backend allowlist, the browser blocks the request before it is sent —
+the page and the Keycard handoff still work, but no data arrives.
 
-- `file://` (no `Origin` header)
-- `http://localhost:5000`, `http://localhost:5173`, `http://localhost:4000`
-- `https://trace-matrix.web.app`, `https://trace-matrix.firebaseapp.com`
-- `https://tracewell.ca`, `https://www.tracewell.ca`
+Measured against the live API on **2026-10-17**, on `OPTIONS /api/settings/site`
+with `Origin: <origin>` and `Access-Control-Request-Headers: authorization`:
 
-**A GitHub Pages origin is not on that list.** The page itself will load and the
-Keycard handoff will work, but every call to
-`https://trace-matrix-api-…run.app/api/...` will fail as a CORS error until the
-Tracewell platform team adds this origin:
+| Origin | Response |
+|---|---|
+| `https://trace-matrix.web.app` | `204` + `access-control-allow-origin` |
+| `https://trace-matrix.firebaseapp.com` | `204` + `access-control-allow-origin` |
+| `https://tracewell.ca` | `204` + `access-control-allow-origin` |
+| `https://www.tracewell.ca` | `204` + `access-control-allow-origin` |
+| `http://localhost:5173` | **`500`, no CORS headers** |
+| `http://localhost:4000`, `http://localhost:5000` | **`500`, no CORS headers** |
+| `https://benptrs2007-spec.github.io` | **`500`, no CORS headers** |
+| `https://example.com` (control) | **`500`, no CORS headers** |
+
+Two things follow, and the second is the surprise:
+
+1. **A GitHub Pages origin is not allowed**, so this host cannot read tenant data
+   until the backend allowlist changes.
+2. **The dev-kit-recommended localhost workflow is not allowed either**, even
+   though the dev kit lists `localhost:5000/5173/4000` as permitted. As deployed,
+   the allowlist contains only the four production Tracewell domains. Treat the
+   dev kit's CORS list as stale until the platform team confirms otherwise.
+
+Watch the failure signature: a non-allowlisted origin gets **HTTP `500` "Internal
+server error", not a clean 4xx**. So if the module reports a 500, suspect the
+allowlist before suspecting the endpoint.
+
+**What to ask the platform team for** — the origin only, no path, plus your tenant
+name so they can verify you own it:
 
 ```
 https://benptrs2007-spec.github.io
 ```
 
-Send them the **origin only** (no path — CORS works at the origin level), plus
-your tenant name so they can verify you own it. Their allowlist is currently
-hardcoded in `core-logic/src/server.ts`, so adding a line and redeploying takes a
-few minutes. The dev kit notes a future change where a tenant's registered
-`custom_modules.entry_url` will auto-allow its own origin; if that has shipped,
-registering the module is enough and no allowlist request is needed.
-
-How to tell which world you are in: the module's status bar and error banner name
-the endpoint and the failure. A CORS rejection looks like a failed `fetch` with no
-HTTP status ("Failed to fetch") rather than a 401 or 403.
-
-Alternative that needs no allowlist change at all: run the module on
-`http://localhost:5173` (see *Running it locally*). That is the dev-kit-recommended
-path, but it only works on the machine running the server.
+The allowlist is currently hardcoded in `core-logic/src/server.ts`. Worth asking
+for `http://localhost:5173` to be restored at the same time if you want the local
+dev loop back. The dev kit mentions a future change where a registered
+`custom_modules.entry_url` auto-allows its own origin; **the measurement above
+cannot rule that in or out**, because it only tests an unregistered origin. So the
+cheapest next step is to register the module and click it: if that change has
+shipped it will simply work, and if not the console names the blocked request.
 
 ---
 
@@ -115,10 +131,12 @@ Keycard itself.
 
 ## Running it locally
 
-Modules must be served over `http://localhost:<port>` on an allowlisted port —
-**5000, 5173, or 4000** — because `file://` cannot be registered as an `entry_url`
-(other users cannot reach your filesystem) and any other port fails CORS silently.
-`file://` still works for a quick double-click glance at the layout.
+Modules must be served over `http://localhost:<port>` because `file://` cannot be
+registered as an `entry_url` (other users cannot reach your filesystem). The dev
+kit names **5000, 5173 or 4000** as allowlisted; the 2026-10-17 measurement above
+found none of them returning CORS headers, so verify with the preflight check in
+that section before assuming the local path works. `file://` still works for a
+quick double-click glance at the layout.
 
 ```bash
 python -m http.server 5173        # or:  npx serve -l 5173

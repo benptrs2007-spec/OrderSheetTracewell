@@ -1,0 +1,814 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Order Sheet</title>
+<style>
+  :root {
+    --h-band: 22px;
+    --h-head: 44px;
+    --h-total: 28px;
+    --firstw: 208px;
+    --colw: 76px;
+    --ink: #16211f;
+    --muted: #6b7a78;
+    --line: #cbd5d3;
+    --line-soft: #e6ebea;
+    --head-bg: #f1f5f4;
+    --band-bg: #dcE8e6;
+    --accent: #0d4f4f;
+    --accent-soft: #e6f2f1;
+    --zebra: #fafbfb;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  /* #app carries an inline display:flex, which outranks the UA [hidden] rule;
+     without this the gate would render on top of a visible app. */
+  #app[hidden] { display: none !important; }
+  body {
+    margin: 0;
+    font: 13px/1.45 Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    color: var(--ink);
+    background: #fff;
+    display: flex;
+    flex-direction: column;
+  }
+  button, select, input { font: inherit; color: inherit; }
+
+  /* ---------------------------------------------------------------- gate */
+  .gate {
+    margin: auto;
+    max-width: 520px;
+    padding: 2.5rem 2rem;
+    border: 1px dashed #9fb2b0;
+    border-radius: 10px;
+    text-align: center;
+    color: #45565a;
+  }
+  .gate h1 { margin: 0 0 .5rem; font-size: 1.15rem; color: var(--ink); }
+  .gate code { background: #f1f5f4; padding: .1rem .3rem; border-radius: 4px; }
+
+  /* ------------------------------------------------------------- toolbar */
+  header.appbar {
+    display: flex;
+    align-items: baseline;
+    gap: .75rem;
+    padding: .6rem 1rem;
+    border-bottom: 1px solid var(--line);
+    background: linear-gradient(180deg, #fff, #f7fafa);
+  }
+  header.appbar h1 { margin: 0; font-size: 1rem; font-weight: 650; letter-spacing: -.01em; }
+  header.appbar .biz { color: var(--accent); font-weight: 600; }
+  header.appbar .spacer { flex: 1; }
+
+  .toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .5rem;
+    padding: .5rem 1rem;
+    border-bottom: 1px solid var(--line);
+    background: #f7fafa;
+  }
+  .toolbar .grp {
+    display: flex;
+    align-items: center;
+    gap: .3rem;
+    padding-right: .55rem;
+    border-right: 1px solid var(--line);
+  }
+  .toolbar .grp:last-child { border-right: 0; }
+  .toolbar label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+  .toolbar input[type=date], .toolbar input[type=search], .toolbar select {
+    border: 1px solid var(--line); background: #fff; border-radius: 6px; padding: .25rem .4rem;
+  }
+  .toolbar input[type=search] { width: 150px; }
+  .toolbar button {
+    border: 1px solid var(--line); background: #fff; border-radius: 6px;
+    padding: .28rem .6rem; cursor: pointer;
+  }
+  .toolbar button:hover { background: var(--accent-soft); border-color: #9dc0bc; }
+  .toolbar button:disabled { opacity: .5; cursor: default; }
+  .seg { display: inline-flex; }
+  .seg button { border-radius: 0; margin-left: -1px; }
+  .seg button:first-child { border-radius: 6px 0 0 6px; margin-left: 0; }
+  .seg button:last-child { border-radius: 0 6px 6px 0; }
+  .seg button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .chip {
+    border: 1px solid var(--line); background: #fff; border-radius: 999px;
+    padding: .18rem .55rem; font-size: 11px; cursor: pointer; color: var(--muted);
+  }
+  .chip.on { background: var(--accent-soft); border-color: #9dc0bc; color: var(--accent); font-weight: 600; }
+
+  .statusbar {
+    display: flex; align-items: center; gap: .6rem;
+    padding: .3rem 1rem; font-size: 11px; color: var(--muted);
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: #9aa7a5; }
+  .dot.busy { background: #d9930a; }
+  .dot.live { background: #17a673; }
+
+  .banner {
+    display: none; padding: .45rem 1rem; font-size: 12px;
+    background: #fff4e5; color: #7a4a06; border-bottom: 1px solid #f0d9b5;
+  }
+  .banner.show { display: block; }
+  .banner.error { background: #fdeaea; color: #8a1f1f; border-color: #f2c9c9; }
+
+  /* ---------------------------------------------------------------- grid */
+  .grid-wrap {
+    flex: 1; overflow: auto; position: relative; outline: none;
+  }
+  table.grid {
+    border-collapse: separate;
+    border-spacing: 0;
+    table-layout: fixed;
+  }
+  table.grid th, table.grid td {
+    border-right: 1px solid var(--line-soft);
+    border-bottom: 1px solid var(--line-soft);
+    padding: 0 .35rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  table.grid thead th {
+    position: sticky;
+    background: var(--head-bg);
+    border-bottom: 1px solid var(--line);
+    font-weight: 600;
+    z-index: 2;
+  }
+  table.grid thead tr.band th {
+    top: 0; height: var(--h-band);
+    font-size: 10px; text-transform: uppercase; letter-spacing: .06em;
+    color: var(--accent); background: var(--band-bg);
+    text-align: center; border-bottom: 1px solid var(--line);
+  }
+  table.grid thead tr.head th {
+    top: var(--h-band); height: var(--h-head);
+    font-size: 10.5px; line-height: 1.15; vertical-align: bottom;
+    white-space: normal; overflow: hidden;
+    padding-bottom: .25rem;
+  }
+  table.grid thead tr.head th .nm { display: block; max-height: 30px; overflow: hidden; }
+  table.grid thead tr.head th .un { display: block; color: var(--muted); font-weight: 400; font-size: 9.5px; }
+
+  table.grid th.corner, table.grid td.cust {
+    position: sticky; left: 0;
+    width: var(--firstw); min-width: var(--firstw);
+    text-align: left; background: var(--head-bg);
+    border-right: 1px solid var(--line);
+  }
+  table.grid th.corner { z-index: 4; }
+  table.grid td.cust { z-index: 1; background: #fff; font-weight: 550; }
+  table.grid tbody tr:nth-child(even) td { background: var(--zebra); }
+  table.grid tbody tr:nth-child(even) td.cust { background: #f4f7f6; }
+  table.grid tbody tr:hover td { background: var(--accent-soft); }
+  table.grid tbody tr:hover td.cust { background: #d9ecea; }
+
+  table.grid td.num { text-align: right; font-variant-numeric: tabular-nums; font-size: 11.5px; }
+  table.grid td.num.zero { color: #c3ccca; }
+  table.grid td.num.has { cursor: pointer; }
+  table.grid td.num.has:hover { outline: 2px solid var(--accent); outline-offset: -2px; }
+  table.grid td.tot, table.grid th.tot { background: #eef4f3; font-weight: 600; }
+  table.grid tfoot th, table.grid tfoot td {
+    position: sticky; bottom: 0; background: #eef4f3 !important;
+    border-top: 1px solid var(--line); z-index: 3;
+    font-weight: 600; height: var(--h-total);
+  }
+  table.grid tfoot td.cust, table.grid tfoot th.corner { z-index: 5; }
+  .custname { display: block; overflow: hidden; text-overflow: ellipsis; }
+  .orders { color: var(--muted); font-weight: 400; font-size: 10px; }
+
+  /* -------------------------------------------------------------- drawer */
+  .drawer {
+    position: fixed; top: 0; right: 0; bottom: 0; width: min(460px, 92vw);
+    background: #fff; border-left: 1px solid var(--line);
+    box-shadow: -12px 0 32px rgba(0,0,0,.10);
+    transform: translateX(102%); transition: transform .18s ease;
+    display: flex; flex-direction: column; z-index: 20;
+  }
+  .drawer.open { transform: none; }
+  .drawer header {
+    padding: .7rem .9rem; border-bottom: 1px solid var(--line); background: #f7fafa;
+    display: flex; align-items: flex-start; gap: .5rem;
+  }
+  .drawer h2 { margin: 0; font-size: .95rem; }
+  .drawer .sub { color: var(--muted); font-size: 11px; }
+  .drawer .x { margin-left: auto; }
+  .drawer .body { overflow: auto; padding: .4rem .9rem 1.4rem; }
+  .drawer table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .drawer th, .drawer td { text-align: right; padding: .3rem .3rem; border-bottom: 1px solid var(--line-soft); }
+  .drawer th:first-child, .drawer td:first-child { text-align: left; }
+  .drawer tfoot td { font-weight: 600; border-top: 1px solid var(--line); }
+  .empty { color: var(--muted); padding: 2rem 1rem; text-align: center; }
+</style>
+</head>
+<body>
+
+<div id="gate" class="gate">
+  <h1>Open this module from Tracewell</h1>
+  <p>This order sheet is a Tracewell module. It is reached from inside the app so it can receive your
+     Keycard: sign in to <strong>Tracewell</strong>, open your nav and click <strong>Order Sheet</strong>
+     under <strong>Modules</strong>.</p>
+  <p class="sub">Opening the URL directly (bookmark, shared link) will not work — the Keycard arrives
+     in the URL fragment when Tracewell opens this tab. This page does not and cannot sign you in.</p>
+</div>
+
+<div id="app" hidden style="display:flex;flex-direction:column;height:100%">
+  <header class="appbar">
+    <h1>Order Sheet <span id="biz" class="biz"></span></h1>
+    <span class="spacer"></span>
+    <span class="sub" id="stamp" style="color:var(--muted);font-size:11px"></span>
+  </header>
+
+  <div class="toolbar">
+    <div class="grp">
+      <label for="from">From</label>
+      <input type="date" id="from" />
+      <label for="to">To</label>
+      <input type="date" id="to" />
+    </div>
+    <div class="grp" id="ranges">
+      <button data-range="today">Today</button>
+      <button data-range="week">7d</button>
+      <button data-range="month">This month</button>
+      <button data-range="30">30d</button>
+      <button data-range="ytd">YTD</button>
+      <button data-range="all">All</button>
+    </div>
+    <div class="grp">
+      <label>Show</label>
+      <span class="seg" id="metric">
+        <button data-metric="units" class="on">Units</button>
+        <button data-metric="amount">$</button>
+      </span>
+    </div>
+    <div class="grp">
+      <label for="cat">Category</label>
+      <select id="cat"><option value="">All</option></select>
+    </div>
+    <div class="grp">
+      <input type="search" id="q" placeholder="Find customer…" />
+    </div>
+    <div class="grp">
+      <span class="chip" id="allCust" role="button" tabindex="0">All customers</span>
+      <span class="chip" id="allProd" role="button" tabindex="0">All products</span>
+    </div>
+    <div class="grp">
+      <span class="chip" id="live" role="button" tabindex="0">Live 30s</span>
+      <button id="refresh">Refresh</button>
+    </div>
+    <div class="grp">
+      <button id="csv">Export CSV</button>
+      <button id="copy">Copy for Excel</button>
+    </div>
+  </div>
+
+  <div class="statusbar">
+    <span class="dot" id="dot"></span>
+    <span id="status">Starting…</span>
+  </div>
+  <div class="banner" id="banner"></div>
+
+  <div class="grid-wrap" id="wrap" tabindex="0">
+    <table class="grid" id="grid"></table>
+  </div>
+</div>
+
+<div class="drawer" id="drawer" aria-hidden="true">
+  <header>
+    <div>
+      <h2 id="dTitle">—</h2>
+      <div class="sub" id="dSub"></div>
+    </div>
+    <button class="x" id="dClose">Close</button>
+  </header>
+  <div class="body" id="dBody"></div>
+</div>
+
+<script src="matrix.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  /* The Tracewell API origin, exactly as given in the Module Developer Kit.
+     Do not "discover" it at runtime. */
+  var API_BASE = 'https://trace-matrix-api-315133380910.us-east1.run.app';
+  var TOKEN_KEY = 'module_keycard';   // namespaced: never collide with the main app's own key
+  var LIVE_MS = 30000;
+  var CONCURRENCY = 6;
+
+  var M = window.OrderSheet;
+
+  /* ------------------------------------------------------- Keycard handoff */
+
+  (function pickUpHandoff() {
+    if (!location.hash) return;
+    var params = new URLSearchParams(location.hash.slice(1));
+    var k = params.get('k');
+    if (k) {
+      localStorage.setItem(TOKEN_KEY, k);
+      history.replaceState({}, '', location.pathname + location.search);
+    }
+  })();
+
+  function authHeaders() {
+    var t = localStorage.getItem(TOKEN_KEY);
+    return t ? { Authorization: 'Bearer ' + t } : {};
+  }
+
+  function showGate() {
+    document.getElementById('app').hidden = true;
+    document.getElementById('gate').style.display = '';
+  }
+
+  function clearKeycard() {
+    localStorage.removeItem(TOKEN_KEY);
+  }
+
+  /* --------------------------------------------------------------- state */
+
+  var state = {
+    products: [],
+    partners: [],
+    orders: [],
+    itemsByOrder: {},        // order_id -> normalized items
+    detailCache: {},         // order_id -> { fp, items }  (survives refreshes)
+    matrix: null,
+    metric: 'units',
+    allCustomers: false,
+    allProducts: true,
+    category: '',
+    query: '',
+    live: false,
+    timer: null,
+    currency: 'CAD',
+    busy: false,
+    loadedOnce: false,
+    lastDrill: null,
+  };
+
+  /* -------------------------------------------------------------- helpers */
+
+  function $(id) { return document.getElementById(id); }
+
+  function banner(msg, isError) {
+    var el = $('banner');
+    if (!msg) { el.className = 'banner'; el.textContent = ''; return; }
+    el.className = 'banner show' + (isError ? ' error' : '');
+    el.textContent = msg;
+  }
+
+  function status(msg, mode) {
+    $('status').textContent = msg;
+    $('dot').className = 'dot' + (mode ? ' ' + mode : '');
+  }
+
+  function isoDay(d) {
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+
+  function today() { return isoDay(new Date()); }
+
+  function fmtQty(n) {
+    if (!n) return '';
+    var r = Math.round(n * 100) / 100;
+    return (Math.abs(r - Math.round(r)) < 1e-9 ? String(Math.round(r)) : r.toFixed(2))
+      .replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+  }
+
+  function fmtMoney(n) {
+    if (!n) return '';
+    return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  function fmtVal(n) {
+    return state.metric === 'amount' ? fmtMoney(n) : fmtQty(n);
+  }
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c];
+    });
+  }
+
+  function stamp() {
+    $('stamp').textContent = 'updated ' + new Date().toLocaleTimeString();
+  }
+
+  /* ----------------------------------------------------------------- api */
+
+  function apiGet(path) {
+    return fetch(API_BASE + '/api' + path, { headers: authHeaders() }).then(function (res) {
+      if (res.status === 401) {
+        // Keycards are short-lived (~1h). The only correct recovery is to send
+        // the user back to Tracewell — never to try to refresh it here.
+        clearKeycard();
+        var err = new Error('Your Tracewell Keycard expired. Open Order Sheet again from the Tracewell nav.');
+        err.unauthorized = true;
+        throw err;
+      }
+      if (!res.ok) {
+        var e = new Error('Tracewell API ' + res.status + ' on ' + path);
+        e.status = res.status;
+        throw e;
+      }
+      return res.json();
+    });
+  }
+
+  // Bounded concurrency so a large date range does not open 60 sockets at once.
+  function mapLimit(items, limit, worker, onProgress) {
+    var out = new Array(items.length);
+    var i = 0, done = 0;
+    return new Promise(function (resolve, reject) {
+      var failed = false;
+      function next() {
+        if (failed) return;
+        if (i >= items.length) return;
+        var idx = i++;
+        Promise.resolve(worker(items[idx], idx)).then(function (v) {
+          out[idx] = v;
+          done++;
+          if (onProgress) onProgress(done, items.length);
+          if (done === items.length) resolve(out);
+          else next();
+        }, function (e) { failed = true; reject(e); });
+      }
+      if (!items.length) return resolve(out);
+      for (var n = 0; n < Math.min(limit, items.length); n++) next();
+    });
+  }
+
+  /* ---------------------------------------------------------------- load */
+
+  function loadSettings() {
+    // The dev kit's endpoint table says /settings/site; the quick-start snippet
+    // says /settings. Try the documented one, fall back once.
+    return apiGet('/settings/site').catch(function () { return apiGet('/settings'); })
+      .then(function (payload) {
+        var s = (payload && payload.settings) || payload || {};
+        state.currency = s.currency || 'CAD';
+        var biz = (s.business_identity && s.business_identity.companyName) || s.business_name || '';
+        $('biz').textContent = biz ? '· ' + biz : '';
+        return s;
+      });
+  }
+
+  function rangeOrders() {
+    var from = $('from').value;
+    var to = $('to').value;
+    return M.filterOrders(state.orders, { from: from, to: to, statuses: null });
+  }
+
+  function fetchDetails(orders, force) {
+    var detailCache = state.detailCache;
+    var missing = [];
+    orders.forEach(function (o) {
+      var fp = o.order_total + '|' + o.total_items + '|' + o.status;
+      var hit = detailCache[o.order_id];
+      if (force || !hit || hit.fp !== fp) missing.push(o);
+    });
+    if (!missing.length) return Promise.resolve(0);
+    return mapLimit(missing, CONCURRENCY, function (o) {
+      return apiGet('/operations/orders/' + encodeURIComponent(o.order_id))
+        .then(function (payload) {
+          return M.normalizeItems(o, payload);
+        });
+    }, function (done, total) {
+      status('Reading order lines ' + done + '/' + total + '…', 'busy');
+    }).then(function (lists) {
+      missing.forEach(function (o, idx) {
+        detailCache[o.order_id] = {
+          fp: o.order_total + '|' + o.total_items + '|' + o.status,
+          items: lists[idx],
+        };
+      });
+      return missing.length;
+    });
+  }
+
+  function refresh(force) {
+    if (state.busy) return Promise.resolve();
+    state.busy = true;
+    $('refresh').disabled = true;
+    banner('');
+    status(state.loadedOnce ? 'Refreshing…' : 'Loading…', 'busy');
+
+    var boot = state.loadedOnce ? Promise.resolve() :
+      Promise.all([
+        loadSettings(),
+        apiGet('/catalog/products').then(function (p) { state.products = M.normalizeProducts(p); }),
+        apiGet('/partners/partners').then(function (p) { state.partners = M.normalizePartners(p); }),
+      ]);
+
+    return boot.then(function () {
+      return apiGet('/operations/orders');
+    }).then(function (payload) {
+      state.orders = M.normalizeOrders(payload);
+      var inRange = rangeOrders();
+      if (inRange.length > 300) {
+        status('Fetching lines for ' + inRange.length + ' orders…', 'busy');
+      }
+      return fetchDetails(inRange, !!force);
+    }).then(function (fetched) {
+      rebuild();
+      state.loadedOnce = true;
+      var m = state.matrix;
+      status(m.ordersInRange + ' orders · ' + m.customerRows + ' customers × ' + m.productColumns +
+        ' products · ' + (fetched ? fetched + ' order lines fetched · ' : '') +
+        (state.live ? 'live' : 'idle'), state.live ? 'live' : '');
+      stamp();
+    }).catch(function (e) {
+      if (e && e.unauthorized) { showGate(); return; }
+      banner(String(e && e.message ? e.message : e), true);
+      status('Failed to load', '');
+    }).then(function () {
+      state.busy = false;
+      $('refresh').disabled = false;
+    });
+  }
+
+  function rebuild() {
+    var inRange = rangeOrders();
+    var itemsByOrder = {};
+    inRange.forEach(function (o) {
+      var hit = state.detailCache[o.order_id];
+      itemsByOrder[o.order_id] = hit ? hit.items : [];
+    });
+    state.matrix = M.buildMatrix({
+      orders: inRange,
+      itemsByOrder: itemsByOrder,
+      partners: state.partners,
+      products: state.products,
+      metric: state.metric,
+      allCustomers: state.allCustomers,
+      allProducts: state.allProducts,
+      category: state.category,
+    });
+    renderGrid();
+  }
+
+  /* --------------------------------------------------------------- render */
+
+  function visibleRows() {
+    var q = state.query.trim().toLowerCase();
+    var rows = state.matrix.rows;
+    if (!q) return rows;
+    return rows.filter(function (r) { return r.name.toLowerCase().indexOf(q) !== -1; });
+  }
+
+  function renderGrid() {
+    var m = state.matrix;
+    var table = $('grid');
+    var cols = m.columns;
+    var rows = visibleRows();
+
+    if (!cols.length || !rows.length) {
+      table.innerHTML = '<tbody><tr><td class="empty">No orders in this range.</td></tr></tbody>';
+      updateCategoryOptions();
+      return;
+    }
+
+    var html = [];
+    var firstW = 'width:' + 'var(--firstw)' + ';min-width:var(--firstw)';
+    var colW = 'width:' + 'var(--colw)' + ';min-width:var(--colw)';
+
+    /* header band: product categories span their columns */
+    html.push('<thead><tr class="band">');
+    html.push('<th class="corner"></th>');
+    m.columnGroups.forEach(function (g) {
+      html.push('<th colspan="' + g.span + '" title="' + esc(g.category) + '">' + esc(g.category) + '</th>');
+    });
+    html.push('<th class="tot" style="' + colW + '">TOTAL</th>');
+    html.push('</tr>');
+
+    /* header: product names across the top */
+    html.push('<tr class="head">');
+    html.push('<th class="corner" style="' + firstW + '">Customer</th>');
+    cols.forEach(function (c) {
+      html.push('<th style="' + colW + '" title="' + esc(c.name + (c.sku ? '  [' + c.sku + ']' : '')) + '">' +
+        '<span class="nm">' + esc(c.name) + '</span>' +
+        (c.unit ? '<span class="un">' + esc(c.unit) + '</span>' : '') + '</th>');
+    });
+    html.push('<th class="tot" style="' + colW + '">Total</th>');
+    html.push('</tr></thead><tbody>');
+
+    /* body: one row per customer */
+    rows.forEach(function (r) {
+      html.push('<tr data-row="' + esc(r.key) + '">');
+      html.push('<td class="cust" title="' + esc(r.name) + '"><span class="custname">' + esc(r.name) +
+        '</span><span class="orders">' + r.orders + ' order' + (r.orders === 1 ? '' : 's') + '</span></td>');
+      cols.forEach(function (c) {
+        var v = M.cellValue(m, r.key, c.key);
+        if (!v) {
+          html.push('<td class="num zero"></td>');
+        } else {
+          html.push('<td class="num has" data-col="' + esc(c.key) + '" title="' + esc(r.name + ' — ' + c.name) +
+            '">' + esc(fmtVal(v)) + '</td>');
+        }
+      });
+      html.push('<td class="num tot">' + esc(fmtVal(M.rowTotal(m, r))) + '</td>');
+      html.push('</tr>');
+    });
+    html.push('</tbody>');
+
+    /* totals: stickers under the columns, like a spreadsheet footer */
+    html.push('<tfoot><tr>');
+    html.push('<th class="corner" style="' + firstW + '">TOTAL</th>');
+    cols.forEach(function (c) {
+      var v = state.metric === 'amount' ? m.columnTotals.amount[c.key] : m.columnTotals.units[c.key];
+      html.push('<td class="num' + (v ? '' : ' zero') + '">' + esc(fmtVal(v || 0)) + '</td>');
+    });
+    html.push('<td class="num tot">' + esc(fmtVal(M.grandTotal(m))) + '</td>');
+    html.push('</tr></tfoot>');
+
+    table.innerHTML = html.join('');
+    updateCategoryOptions();
+  }
+
+  function updateCategoryOptions() {
+    var sel = $('cat');
+    var cats = {};
+    state.products.forEach(function (p) { if (p.category) cats[p.category] = true; });
+    Object.keys(state.matrix.cells || {}).forEach(function () {});
+    var list = Object.keys(cats).sort();
+    var current = sel.value;
+    if (sel.options.length === list.length + 1) return;
+    sel.innerHTML = '<option value="">All</option>' +
+      list.map(function (c) { return '<option value="' + esc(c) + '">' + esc(c) + '</option>'; }).join('');
+    sel.value = current;
+  }
+
+  /* ------------------------------------------------------------ drilldown */
+
+  function openDrill(rowKey, colKey) {
+    var m = state.matrix;
+    var detail = M.cellDetail(m, rowKey, colKey);
+    if (!detail) return;
+    var row = m.rows.filter(function (r) { return r.key === rowKey; })[0];
+    var col = m.columns.filter(function (c) { return c.key === colKey; })[0];
+    state.lastDrill = { rowKey: rowKey, colKey: colKey };
+
+    $('dTitle').textContent = (row ? row.name : 'Customer') + ' × ' + (col ? col.name : 'Product');
+    $('dSub').textContent = detail.lines.length + ' line' + (detail.lines.length === 1 ? '' : 's') +
+      ' · ' + fmtQty(detail.units) + ' ' + (col && col.unit ? col.unit : '') +
+      ' · ' + fmtMoney(detail.amount) + ' ' + state.currency;
+
+    var html = ['<table><thead><tr><th>Date</th><th>Order</th><th>Qty</th><th>Price</th><th>Amount</th></tr></thead><tbody>'];
+    detail.lines.forEach(function (l) {
+      html.push('<tr><td>' + esc((l.order_date || '').slice(0, 10)) + '</td>' +
+        '<td>#' + esc(l.order_number || '') + '</td>' +
+        '<td>' + esc(fmtQty(l.quantity)) + '</td>' +
+        '<td>' + esc(fmtMoney(l.price_per_unit)) + '</td>' +
+        '<td>' + esc(fmtMoney(l.amount)) + '</td></tr>');
+    });
+    html.push('</tbody><tfoot><tr><td colspan="2">Total</td><td>' + esc(fmtQty(detail.units)) +
+      '</td><td></td><td>' + esc(fmtMoney(detail.amount)) + '</td></tr></tfoot></table>');
+    $('dBody').innerHTML = html.join('');
+    $('drawer').classList.add('open');
+    $('drawer').setAttribute('aria-hidden', 'false');
+  }
+
+  function closeDrill() {
+    $('drawer').classList.remove('open');
+    $('drawer').setAttribute('aria-hidden', 'true');
+  }
+
+  /* --------------------------------------------------------------- export */
+
+  function download(name, text, mime) {
+    var blob = new Blob([text], { type: mime });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url; a.download = name;
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+  }
+
+  function exportName(ext) {
+    return 'order-sheet_' + ($('from').value || 'all') + '_to_' + ($('to').value || today()) + '.' + ext;
+  }
+
+  /* ------------------------------------------------------------------ wire */
+
+  function setRange(kind) {
+    var now = new Date();
+    var from = new Date(now), to = new Date(now);
+    if (kind === 'today') { /* same day */ }
+    else if (kind === 'week') { from.setDate(now.getDate() - 6); }
+    else if (kind === 'month') { from = new Date(now.getFullYear(), now.getMonth(), 1); }
+    else if (kind === '30') { from.setDate(now.getDate() - 29); }
+    else if (kind === 'ytd') { from = new Date(now.getFullYear(), 0, 1); }
+    else if (kind === 'all') { from = new Date(2000, 0, 1); }
+    $('from').value = isoDay(from);
+    $('to').value = isoDay(to);
+    refresh(false);
+  }
+
+  function toggleLive(on) {
+    state.live = on;
+    $('live').classList.toggle('on', on);
+    if (state.timer) { clearInterval(state.timer); state.timer = null; }
+    if (on) {
+      state.timer = setInterval(function () {
+        if (!document.hidden) refresh(false);
+      }, LIVE_MS);
+    }
+    status(state.live ? 'Live — refreshing every 30s' : 'Live off', state.live ? 'live' : '');
+  }
+
+  function wire() {
+    $('refresh').addEventListener('click', function () { refresh(true); });
+    $('from').addEventListener('change', function () { refresh(false); });
+    $('to').addEventListener('change', function () { refresh(false); });
+
+    $('ranges').addEventListener('click', function (e) {
+      var b = e.target.closest('button');
+      if (b) setRange(b.getAttribute('data-range'));
+    });
+
+    $('metric').addEventListener('click', function (e) {
+      var b = e.target.closest('button');
+      if (!b) return;
+      state.metric = b.getAttribute('data-metric');
+      Array.prototype.forEach.call($('metric').children, function (x) { x.classList.toggle('on', x === b); });
+      rebuild();
+    });
+
+    $('cat').addEventListener('change', function () {
+      state.category = this.value;
+      rebuild();
+    });
+
+    var qTimer = null;
+    $('q').addEventListener('input', function () {
+      var v = this.value;
+      clearTimeout(qTimer);
+      qTimer = setTimeout(function () {
+        state.query = v;
+        renderGrid();
+      }, 120);
+    });
+
+    $('allCust').addEventListener('click', function () { this.classList.toggle('on'); state.allCustomers = this.classList.contains('on'); rebuild(); });
+    $('allProd').classList.add('on');
+    $('allProd').addEventListener('click', function () { this.classList.toggle('on'); state.allProducts = this.classList.contains('on'); rebuild(); });
+    $('live').addEventListener('click', function () { toggleLive(!state.live); });
+
+    $('grid').addEventListener('click', function (e) {
+      var td = e.target.closest('td.has');
+      if (!td) return;
+      var tr = td.closest('tr');
+      openDrill(tr.getAttribute('data-row'), td.getAttribute('data-col'));
+    });
+
+    $('dClose').addEventListener('click', closeDrill);
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') closeDrill();
+      if (e.key === 'F5') return;
+    });
+
+    $('csv').addEventListener('click', function () {
+      download(exportName('csv'), '\ufeff' + M.toCSV(state.matrix), 'text/csv;charset=utf-8');
+    });
+    $('copy').addEventListener('click', function () {
+      var tsv = M.toTSV(state.matrix);
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(tsv).then(function () {
+          banner('Copied ' + state.matrix.rows.length + ' rows — paste into Excel or Sheets.');
+          setTimeout(function () { banner(''); }, 4000);
+        }, function () { banner('Clipboard blocked by the browser — use Export CSV instead.', true); });
+      } else {
+        banner('Clipboard unavailable — use Export CSV instead.', true);
+      }
+    });
+
+    // Coming back to a stale tab should not show stale numbers.
+    window.addEventListener('focus', function () {
+      if (state.loadedOnce && !state.busy) refresh(false);
+    });
+  }
+
+  /* ----------------------------------------------------------------- boot */
+
+  if (!localStorage.getItem(TOKEN_KEY)) {
+    showGate();
+  } else {
+    document.getElementById('gate').style.display = 'none';
+    $('app').hidden = false;
+    var now = new Date();
+    $('from').value = isoDay(new Date(now.getFullYear(), now.getMonth(), 1));
+    $('to').value = isoDay(now);
+    wire();
+    refresh(true);
+  }
+})();
+</script>
+</body>
+</html>

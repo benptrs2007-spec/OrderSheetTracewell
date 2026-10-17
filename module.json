@@ -1,0 +1,9 @@
+{
+  "name": "order-sheet",
+  "version": "1.0.0",
+  "nav_label": "Order Sheet",
+  "icon": "🧾",
+  "description": "Excel-style worksheet: customers down the left, every product across the top, filled in automatically from your orders. Drill into any cell, export to CSV or paste straight into Excel.",
+  "entry_url": "https://benptrs2007-spec.github.io/OrderSheetTracewell/",
+  "visible_to": ["tenant_admin", "staff"]
+}

@@ -1,0 +1,5 @@
+# The module has no build step — nothing here is generated.
+.DS_Store
+Thumbs.db
+node_modules/
+*.log
